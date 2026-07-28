@@ -9,21 +9,23 @@ terraform {
   }
 }
 provider "aws" {
-  region = "us-east-1"
+  region = var.aws_region
 }
+data "aws_caller_identity" "current" {}
+
 resource "aws_s3_bucket" "app_data" {
-  bucket = "ce-lab-dev-app-data-12345"
+  bucket = "ce-lab-${var.environment}-app-data-${data.aws_caller_identity.current.account_id}"
 }
 resource "aws_security_group" "app_sg" {
-  name        = "ce-lab-dev-sg"
-  description = "Security group for dev app servers"
+  name = "${var.sg_name}-${var.environment}"
+  description = "Security group for ${var.environment} app servers"
 
   ingress {
     description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.ssh_cidr_blocks
   }
 
   ingress {
@@ -41,12 +43,21 @@ resource "aws_security_group" "app_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+}
 resource "aws_instance" "app_server" {
-  ami                    = "ami-0abcdef1234567890"
-  instance_type          = "t3.micro"
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.app_sg.id]
 
   tags = {
-    Name = "ce-lab-dev-app-1"
+    Name = "ce-lab-${var.environment}-app-1"
   }
 }

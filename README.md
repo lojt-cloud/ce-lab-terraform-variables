@@ -99,3 +99,23 @@ terraform destroy -var-file="prod.tfvars"
 ## Screenshots
 
 See `screenshots/` for evidence of `terraform plan`/`apply` output for both `dev` and `prod` environments.
+
+## Challenges faced
+
+Committed local Terraform state and provider binaries by mistake.
+Before adding a .gitignore, I ran git add . after applying and destroying the dev environment, which staged and committed:
+.terraform/ — the local folder Terraform creates on init, containing the actual downloaded AWS provider binary (674MB)
+terraform.tfstate / terraform.tfstate.backup. The local state files tracking real deployed resources
+The push was rejected by GitHub because the provider binary exceeded GitHub's 100MB file size limit, so nothing actually landed on the remote. but this was closer to a lucky save than a safe outcome:
+
+If the binary had been under 100MB, the push would have succeeded, permanently bloating repo history.
+terraform.tfstate is the more serious risk in a real environment: depending on what's deployed, state 
+files can contain secrets in plaintext (passwords, keys, other sensitive resource attributes), 
+and committing it to a shared repo can leak credentials or cause conflicting "truth" about infrastructure when multiple people apply locally.
+
+Fix: added a .gitignore excluding .terraform/, terraform.tfstate, and terraform.tfstate.backup (but not .terraform.lock.hcl, which is small, contains no secrets, and should be committed so everyone locks the same provider version). 
+Then used git reset --soft HEAD~1 to undo the bad commit without losing work, re-staged only the intended files, and re-pushed cleanly.
+
+Takeaway:
+ .gitignore should be one of the first files created in any Terraform repo, before the first terraform init/apply and not added reactively after a mistake. 
+As for now it was a good learning experience where nothing serious happened compared if this would've happened in production. 
